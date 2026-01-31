@@ -20,22 +20,28 @@ RUN curl -fSL -o node.tar.gz https://nodejs.org/dist/v18.19.0/node-v18.19.0-linu
     && ln -s /usr/local/nodejs/bin/npm /usr/local/bin/npm
 
 # Download app from GitHub (replace with your repo URL)
-RUN curl -L -o app.zip https://github.com/charles-bukow/unsagg/archive/refs/heads/main.zip \
+RUN curl -L -o app.zip https://github.com/YOUR_USERNAME/unsagg/archive/refs/heads/main.zip \
     && unzip app.zip && rm app.zip \
     && mv unsagg-main/* . && rm -rf unsagg-main
 
 # Install app dependencies
 RUN npm install --production
 
-# Replace port 7000 with port 80
-RUN find . -type f -name "*.js" -exec sed -i 's/7000/80/g' {} \; || true
-RUN find . -type f -name "*.json" -exec sed -i 's/7000/80/g' {} \; || true
+# Replace port 7000 with port 80 in JavaScript files
+# IMPORTANT: Use enhanced-addon.js as the main entry point
+RUN if [ -f "enhanced-addon.js" ]; then \
+        mv enhanced-addon.js index.js; \
+    fi
+
+# Replace port references
+RUN find . -type f -name "*.js" -exec sed -i 's/const PORT = process\.env\.PORT || 7000/const PORT = process.env.PORT || 80/g' {} \; || true
 
 # Create necessary directories with permissions
 RUN mkdir -p data/cache log temp && chmod -R 777 data log temp
 
 # Set environment variables
 ENV NODE_ENV=production
+ENV PORT=80
 
 # Start the application
 CMD ["node", "index.js"]
