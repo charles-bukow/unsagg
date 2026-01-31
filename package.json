@@ -1,0 +1,26 @@
+{
+  "name": "stremio-usenet-aggregator",
+  "version": "1.0.0",
+  "description": "Aggregates streams from multiple Usenet Streamer Stremio addons",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": [
+    "stremio",
+    "addon",
+    "usenet",
+    "aggregator"
+  ],
+  "author": "",
+  "license": "MIT"
+}
