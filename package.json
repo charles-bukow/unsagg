@@ -1,26 +1,32 @@
 {
-  "name": "stremio-usenet-aggregator",
-  "version": "1.0.0",
-  "description": "Aggregates streams from multiple Usenet Streamer Stremio addons",
+  "name": "usenet-streamer-aggregator",
+  "version": "1.2.0",
+  "description": "Stremio addon that aggregates streams from multiple Usenet streamer instances with enhanced metadata extraction",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "node-fetch": "^2.7.0"
-  },
-  "engines": {
-    "node": ">=14.0.0"
+    "dev": "node index.js",
+    "test": "node test.js"
   },
   "keywords": [
     "stremio",
     "addon",
     "usenet",
+    "streaming",
     "aggregator"
   ],
-  "author": "",
-  "license": "MIT"
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YOUR_USERNAME/unsagg.git"
+  }
 }
