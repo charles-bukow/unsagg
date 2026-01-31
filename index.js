@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const { extractStreamMetadata } = require('./streamMetadata');
 
 const app = express();
 app.use(cors());
@@ -106,9 +107,9 @@ function getAddonBaseUrl(instance) {
 // Manifest for our aggregator addon
 const MANIFEST = {
   id: 'org.stremio.usenet.aggregator',
-  version: '1.1.0',
-  name: 'Usenet Streamer Aggregator (English)',
-  description: `Aggregates English streams from ${ADDON_INSTANCES.length} Usenet Streamer instances`,
+  version: '1.2.0',
+  name: 'Usenet Streamer Aggregator (English Enhanced)',
+  description: `Aggregates English streams from ${ADDON_INSTANCES.length} Usenet Streamer instances with enhanced metadata`,
   types: ['movie', 'series'],
   catalogs: [],
   resources: ['stream'],
@@ -118,6 +119,88 @@ const MANIFEST = {
     configurationRequired: false
   }
 };
+
+/**
+ * Format size in human-readable format
+ */
+function formatSize(bytes) {
+  if (!bytes || bytes === 0) return '';
+  
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const size = (bytes / Math.pow(1024, i)).toFixed(2);
+  
+  return `${size} ${sizes[i]}`;
+}
+
+/**
+ * Build enhanced stream name with metadata
+ */
+function buildEnhancedStreamName(stream, hostname) {
+  const title = stream.name || stream.title || '';
+  const metadata = extractStreamMetadata(title);
+  
+  // Build metadata badges
+  const parts = [];
+  
+  // Quality
+  if (metadata.quality.resolution) {
+    parts.push(`${metadata.quality.emoji} ${metadata.quality.resolution}`);
+  }
+  
+  // Language
+  if (metadata.language.flag) {
+    parts.push(`${metadata.language.flag} ${metadata.language.name}`);
+  }
+  
+  // HDR
+  if (metadata.hdr) {
+    parts.push(metadata.hdr);
+  }
+  
+  // Source
+  if (metadata.source) {
+    parts.push(metadata.source);
+  }
+  
+  // Codec
+  if (metadata.codec) {
+    parts.push(metadata.codec);
+  }
+  
+  // Audio
+  if (metadata.audio) {
+    parts.push(metadata.audio);
+  }
+  
+  // Size
+  if (stream.meta && stream.meta.size) {
+    parts.push(`💾 ${formatSize(stream.meta.size)}`);
+  }
+  
+  // Cached/Instant indicator
+  const text = title.toLowerCase();
+  const isCached = stream.meta?.cached === true || 
+                  stream.meta?.cachedFromHistory === true ||
+                  text.includes('instant') ||
+                  text.includes('cached') ||
+                  text.includes('⚡') ||
+                  text.includes('✓');
+  
+  if (isCached) {
+    parts.push('⚡ INSTANT');
+  }
+  
+  // Release group
+  if (metadata.releaseGroup) {
+    parts.push(metadata.releaseGroup);
+  }
+  
+  // Source hostname
+  parts.push(`🌐 ${hostname}`);
+  
+  return parts.join(' | ');
+}
 
 // Fetch streams from a single addon with timeout
 async function fetchStreamsFromAddon(instance, type, id, timeout = 5000) {
@@ -131,7 +214,7 @@ async function fetchStreamsFromAddon(instance, type, id, timeout = 5000) {
     const response = await fetch(streamUrl, { 
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Stremio-Aggregator/1.0'
+        'User-Agent': 'Stremio-Aggregator/1.2'
       }
     });
     clearTimeout(timeoutId);
@@ -141,11 +224,18 @@ async function fetchStreamsFromAddon(instance, type, id, timeout = 5000) {
     }
     
     const data = await response.json();
-    const streams = (data.streams || []).map(stream => ({
-      ...stream,
-      name: stream.name ? `${stream.name} [${new URL(instance.url).hostname}]` : `[${new URL(instance.url).hostname}]`,
-      _source: instance.url
-    }));
+    const hostname = new URL(instance.url).hostname;
+    
+    const streams = (data.streams || []).map(stream => {
+      const enhancedName = buildEnhancedStreamName(stream, hostname);
+      
+      return {
+        ...stream,
+        name: enhancedName,
+        _source: instance.url,
+        _originalName: stream.name || stream.title
+      };
+    });
     
     return { streams, source: instance.url };
   } catch (error) {
@@ -178,48 +268,40 @@ async function fetchAllStreams(type, id) {
   
   // Filter for English content only
   const englishStreams = allStreams.filter(stream => {
-    const text = `${stream.name || ''} ${stream.title || ''}`.toLowerCase();
-    const meta = stream.meta || {};
+    const title = stream._originalName || stream.name || '';
+    const metadata = extractStreamMetadata(title);
     
-    // Check meta for language info
-    const indexerLang = (meta.indexerLanguage || '').toLowerCase();
-    const prefLangName = (meta.preferredLanguageName || '').toLowerCase();
-    const languages = (meta.languages || []).map(l => l.toLowerCase());
+    // Check if it's dubbed content (includes English audio)
+    if (metadata.dubInfo.isDubbed && 
+        (metadata.dubInfo.confidence === 'high' || metadata.dubInfo.confidence === 'medium')) {
+      return true;
+    }
     
-    // Exclude if explicitly marked as non-English language
-    const nonEnglishLanguages = ['german', 'french', 'spanish', 'italian', 'portuguese', 
-      'russian', 'chinese', 'japanese', 'korean', 'dutch', 'polish', 'turkish',
-      'arabic', 'hindi', 'swedish', 'norwegian', 'danish', 'finnish', 'czech',
-      'hungarian', 'romanian', 'greek', 'thai', 'vietnamese', 'indonesian'];
+    // Check if it's explicitly English
+    if (metadata.language.name === 'English') {
+      return true;
+    }
     
-    // Check if any non-English language is mentioned in meta
-    if (nonEnglishLanguages.includes(indexerLang)) return false;
-    if (nonEnglishLanguages.includes(prefLangName)) return false;
-    if (languages.some(l => nonEnglishLanguages.includes(l))) return false;
+    // Check if it's original language (likely English for most content)
+    if (metadata.language.name === 'Original Language') {
+      return true;
+    }
     
-    // Check title/name for language indicators
-    const langPatterns = [
-      /\bgerman\b/, /\bfrench\b/, /\bspanish\b/, /\bitalian\b/, /\bportuguese\b/,
-      /\brussian\b/, /\bchinese\b/, /\bjapanese\b/, /\bkorean\b/, /\bdutch\b/,
-      /\bpolish\b/, /\bturkish\b/, /\barabic\b/, /\bhindi\b/, /\bswedish\b/,
-      /\bnorwegian\b/, /\bdanish\b/, /\bfinnish\b/, /\bczech\b/, /\bhungarian\b/,
-      /\bromanian\b/, /\bgreek\b/, /\bthai\b/, /\bvietnamese\b/, /\bindonesian\b/,
-      /\.ger\./i, /\.fra\./i, /\.spa\./i, /\.ita\./i, /\.rus\./i, /\.kor\./i,
-      /\.jpn\./i, /\.chn\./i, /\.pol\./i, /\.tur\./i, /\.ara\./i, /\.hin\./i,
-      /\bger\b/i, /\bdl\b/i  // DL often indicates Dual Language (German)
-    ];
+    // Exclude specific non-English languages
+    const excludedLanguages = ['Korean', 'Japanese', 'Chinese', 'German', 'French', 
+      'Spanish', 'Italian', 'Russian', 'Indian', 'Polish', 'Dutch', 'Portuguese', 
+      'Turkish', 'Arabic', 'Multi-Lingual'];
     
-    // If title contains non-English language marker, exclude
-    for (const pattern of langPatterns) {
-      if (pattern.test(text)) return false;
+    if (excludedLanguages.includes(metadata.language.name)) {
+      return false;
     }
     
     return true;
   });
   
-  // Filter by size: max 15GB for movies, 2.5GB for series
-  const MAX_MOVIE_SIZE = 15 * 1024 * 1024 * 1024;  // 15 GB
-  const MAX_SERIES_SIZE = 2.5 * 1024 * 1024 * 1024; // 2.5 GB
+  // Filter by size: max 75GB for movies, 10GB for series
+  const MAX_MOVIE_SIZE = 75 * 1024 * 1024 * 1024;  // 75 GB
+  const MAX_SERIES_SIZE = 10 * 1024 * 1024 * 1024; // 10 GB
   
   const sizeFilteredStreams = englishStreams.filter(stream => {
     const meta = stream.meta || {};
@@ -238,10 +320,10 @@ async function fetchAllStreams(type, id) {
     return true;
   });
   
-  // Sort streams: instant/cached first, then by quality
+  // Sort streams: instant/cached first, then by quality, then by size
   sizeFilteredStreams.sort((a, b) => {
-    const text_a = `${a.name || ''} ${a.title || ''}`.toLowerCase();
-    const text_b = `${b.name || ''} ${b.title || ''}`.toLowerCase();
+    const text_a = (a._originalName || a.name || '').toLowerCase();
+    const text_b = (b._originalName || b.name || '').toLowerCase();
     const meta_a = a.meta || {};
     const meta_b = b.meta || {};
     
@@ -284,7 +366,7 @@ async function fetchAllStreams(type, id) {
     return size_b - size_a;
   });
   
-  console.log(`[${type}/${id}] Found ${allStreams.length} total, ${englishStreams.length} English, ${sizeFilteredStreams.length} after size filter (max ${type === 'movie' ? '15GB' : '2.5GB'}) from ${stats.success} sources`);
+  console.log(`[${type}/${id}] Found ${allStreams.length} total, ${englishStreams.length} English, ${sizeFilteredStreams.length} after size filter (max ${type === 'movie' ? '75GB' : '10GB'}) from ${stats.success} sources`);
   
   return sizeFilteredStreams;
 }
@@ -357,4 +439,5 @@ app.listen(PORT, () => {
   console.log(`Stremio Usenet Aggregator running on port ${PORT}`);
   console.log(`Manifest: http://localhost:${PORT}/manifest.json`);
   console.log(`Aggregating ${ADDON_INSTANCES.length} addon instances`);
+  console.log(`Enhanced metadata extraction enabled`);
 });
