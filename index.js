@@ -266,44 +266,11 @@ async function fetchAllStreams(type, id) {
     }
   }
   
-  // Filter for English content only
-  const englishStreams = allStreams.filter(stream => {
-    const title = stream._originalName || stream.name || '';
-    const metadata = extractStreamMetadata(title);
-    
-    // Check if it's dubbed content (includes English audio)
-    if (metadata.dubInfo.isDubbed && 
-        (metadata.dubInfo.confidence === 'high' || metadata.dubInfo.confidence === 'medium')) {
-      return true;
-    }
-    
-    // Check if it's explicitly English
-    if (metadata.language.name === 'English') {
-      return true;
-    }
-    
-    // Check if it's original language (likely English for most content)
-    if (metadata.language.name === 'Original Language') {
-      return true;
-    }
-    
-    // Exclude specific non-English languages
-    const excludedLanguages = ['Korean', 'Japanese', 'Chinese', 'German', 'French', 
-      'Spanish', 'Italian', 'Russian', 'Indian', 'Polish', 'Dutch', 'Portuguese', 
-      'Turkish', 'Arabic', 'Multi-Lingual'];
-    
-    if (excludedLanguages.includes(metadata.language.name)) {
-      return false;
-    }
-    
-    return true;
-  });
-  
   // Filter by size: max 75GB for movies, 10GB for series
   const MAX_MOVIE_SIZE = 75 * 1024 * 1024 * 1024;  // 75 GB
   const MAX_SERIES_SIZE = 10 * 1024 * 1024 * 1024; // 10 GB
   
-  const sizeFilteredStreams = englishStreams.filter(stream => {
+  const sizeFilteredStreams = allStreams.filter(stream => {
     const meta = stream.meta || {};
     const size = meta.size || 0;
     
@@ -366,7 +333,7 @@ async function fetchAllStreams(type, id) {
     return size_b - size_a;
   });
   
-  console.log(`[${type}/${id}] Found ${allStreams.length} total, ${englishStreams.length} English, ${sizeFilteredStreams.length} after size filter (max ${type === 'movie' ? '75GB' : '10GB'}) from ${stats.success} sources`);
+  console.log(`[${type}/${id}] Found ${allStreams.length} total streams, ${sizeFilteredStreams.length} after size filter (max ${type === 'movie' ? '75GB' : '10GB'}) from ${stats.success} sources`);
   
   return sizeFilteredStreams;
 }
