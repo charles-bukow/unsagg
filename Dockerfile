@@ -20,7 +20,7 @@ RUN curl -fSL -o node.tar.gz https://nodejs.org/dist/v18.19.0/node-v18.19.0-linu
     && ln -s /usr/local/nodejs/bin/npm /usr/local/bin/npm
 
 # Download app from GitHub (replace with your repo URL)
-RUN curl -L -o app.zip https://github.com/YOUR_USERNAME/unsagg/archive/refs/heads/main.zip \
+RUN curl -L -o app.zip https://github.com/charles-bukow/unsagg/archive/refs/heads/noteng.zip \
     && unzip app.zip && rm app.zip \
     && mv unsagg-main/* . && rm -rf unsagg-main
 
