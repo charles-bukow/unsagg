@@ -49,7 +49,7 @@ function getAddonBaseUrl(instance) {
 const MANIFEST = {
   id: 'org.stremio.usenet.aggregator',
   version: '1.2.0',
-  name: 'Usenet Streamer Aggregator (English Enhanced)',
+  name: 'Usenet Streamer Aggregator',
   description: `Aggregates English streams from ${ADDON_INSTANCES.length} Usenet Streamer instances with enhanced metadata`,
   types: ['movie', 'series'],
   catalogs: [],
